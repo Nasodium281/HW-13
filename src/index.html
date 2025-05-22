@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>Visualization: สินค้า Dummy</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      background-color: #f2f2f2;
+    }
+  
+    h1, h2 {
+      text-align: center;
+    }
+  
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem; /* 👈 เพิ่มช่องว่างระหว่างการ์ด */
+      margin-bottom: 3rem;
+    }
+  
+    .chart-section, .table-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 600px;
+    }
+  
+    canvas {
+      max-width: 100%;
+    }
+  
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+  
+    th, td {
+      padding: 0.6rem;
+      border-bottom: 1px solid #ccc;
+      text-align: left;
+    }
+  
+    select {
+      padding: 0.5rem;
+      margin-top: 1rem;
+    }
+  </style>
+  
+</head>
+<body>
+
+  <h1>📊 Visualization: สถานะสินค้า & รายละเอียด</h1>
+
+<!-- ปุ่มสำหรับกลับไปที่หน้าแรก -->
+  <div style="text-align: center; margin-bottom: 24px;">
+    <a href="/" style="text-decoration: none;">
+      <button
+        style="
+          padding: 10px 20px;
+          font-size: 1rem;
+          border-radius: 8px;
+          background-color: #cdb4db; /* ม่วงพาสเทล */
+          color: #4a4a4a;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          transition: background-color 0.3s ease;
+        "
+        onmouseover="this.style.backgroundColor='#e0bbef'"
+        onmouseout="this.style.backgroundColor='#cdb4db'"
+      >
+        Home
+      </button>
+    </a>
+  </div>
+  
+
+  <!-- SECTION 1: Pie Chart + Filter + Table -->
+  <div class="container">
+    <div class="chart-section">
+      <label for="statusFilter">กรองสถานะสินค้า: </label>
+      <select id="statusFilter">
+        <option value="all">ทั้งหมด</option>
+      </select>
+      <canvas id="availabilityChart"></canvas>
+    </div>
+
+    <div class="table-section">
+      <h2>รายการสินค้า</h2>
+      <table id="productTable">
+        <thead>
+          <tr>
+            <th>ชื่อสินค้า</th>
+            <th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION 2: Stock Chart -->
+  <div class="container">
+    <div class="chart-section">
+      <h2>จำนวน Stock ต่อสินค้า</h2>
+      <canvas id="stockChart"></canvas>
+    </div>
+
+    <!-- Rating Chart -->
+    <div class="chart-section">
+      <h2>Rating ต่อสินค้า</h2>
+      <canvas id="ratingChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    async function loadData() {
+      const res = await fetch('https://dummyjson.com/products');
+      const { products } = await res.json();
+
+      const availabilityChartCanvas = document.getElementById('availabilityChart');
+      const stockChartCanvas = document.getElementById('stockChart');
+      const ratingChartCanvas = document.getElementById('ratingChart');
+      const statusFilter = document.getElementById('statusFilter');
+      const tableBody = document.querySelector('#productTable tbody');
+
+      let availabilityChart;
+
+      // 👇 ดึงค่าสถานะที่ไม่ซ้ำกันมาใส่ใน filter
+      const uniqueStatuses = [...new Set(products.map(p => p.availabilityStatus || 'Unknown'))];
+      uniqueStatuses.forEach(status => {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status;
+        statusFilter.appendChild(option);
+      });
+
+      function updateChartAndTable(filteredProducts) {
+        const statusCount = {};
+        tableBody.innerHTML = '';
+
+        filteredProducts.forEach(p => {
+          const status = p.availabilityStatus || 'Unknown';
+          statusCount[status] = (statusCount[status] || 0) + 1;
+          tableBody.innerHTML += `<tr><td>${p.title}</td><td>${status}</td></tr>`;
+        });
+
+        if (availabilityChart) availabilityChart.destroy();
+        availabilityChart = new Chart(availabilityChartCanvas, {
+          type: 'pie',
+          data: {
+            labels: Object.keys(statusCount),
+            datasets: [{
+              data: Object.values(statusCount),
+              backgroundColor: ['#4CAF50', '#F44336', '#FFC107', '#9E9E9E']
+            }]
+          },
+          options: {
+            plugins: {
+              title: {
+                display: true,
+                text: 'สัดส่วนสถานะสินค้า'
+              }
+            }
+          }
+        });
+      }
+
+      function updateBarCharts(products) {
+        const labels = products.map(p => p.title);
+        const stockData = products.map(p => p.stock);
+        const ratingData = products.map(p => p.rating);
+
+        new Chart(stockChartCanvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Stock',
+              data: stockData,
+              backgroundColor: '#2196F3'
+            }]
+          },
+          options: {
+            plugins: {
+              title: {
+                display: true,
+                text: 'จำนวน Stock ต่อสินค้า'
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        });
+
+        new Chart(ratingChartCanvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Rating',
+              data: ratingData,
+              backgroundColor: '#FF9800'
+            }]
+          },
+          options: {
+            plugins: {
+              title: {
+                display: true,
+                text: 'คะแนน Rating ต่อสินค้า'
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 5
+              }
+            }
+          }
+        });
+      }
+
+      function applyFilter() {
+        const selected = statusFilter.value;
+        const filtered = selected === 'all'
+          ? products
+          : products.filter(p => p.availabilityStatus === selected);
+
+        updateChartAndTable(filtered);
+      }
+
+      statusFilter.addEventListener('change', applyFilter);
+
+      // Load everything initially
+      applyFilter();
+      updateBarCharts(products);
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
